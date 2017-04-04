@@ -1,5 +1,6 @@
-from keras.engine.topology import Layer
 import keras.backend as K
+from keras.engine.topology import Layer
+import tensorflow as tf
 
 class RoiPoolingConv(Layer):
     '''ROI pooling layer for 2D inputs.
@@ -21,6 +22,7 @@ class RoiPoolingConv(Layer):
         3D tensor with shape:
         `(1, num_rois, channels, pool_size, pool_size)`
     '''
+
     def __init__(self, pool_size, num_rois, **kwargs):
 
         self.dim_ordering = K.image_dim_ordering()
@@ -45,7 +47,7 @@ class RoiPoolingConv(Layer):
 
     def call(self, x, mask=None):
 
-        assert(len(x) == 2)
+        assert (len(x) == 2)
 
         img = x[0]
         rois = x[1]
@@ -54,68 +56,45 @@ class RoiPoolingConv(Layer):
 
         outputs = []
 
-        
         for roi_idx in range(self.num_rois):
 
-            x = rois[0, roi_idx, 0]
-            y = rois[0, roi_idx, 1]
-            w = rois[0, roi_idx, 2]
-            h = rois[0, roi_idx, 3]
-            
-            row_length = w / float(self.pool_size)
-            col_length = h / float(self.pool_size)
+            x = K.reshape(rois[:, roi_idx, 0], [-1, 1])
+            y = K.reshape(rois[:, roi_idx, 1], [-1, 1])
+            w = K.reshape(rois[:, roi_idx, 2], [-1, 1])
+            h = K.reshape(rois[:, roi_idx, 3], [-1, 1])
+
+            row_length = K.reshape(w / float(self.pool_size), [-1, 1])
+            col_length = K.reshape(h / float(self.pool_size), [-1, 1])
 
             num_pool_regions = self.pool_size
-
-            if self.dim_ordering == 'th':
+            def fun(elem):
+                x_crop_in, x_in, y_in, row_in, col_in = elem
+                acc = []
                 for jy in range(num_pool_regions):
                     for ix in range(num_pool_regions):
-                        x1 = x + ix * row_length
-                        x2 = x1 + row_length
-                        y1 = y + jy * col_length
-                        y2 = y1 + col_length
+                        x1 = x_in + ix * row_in
+                        x2 = x1 + row_in
+                        y1 = y_in + jy * col_in
+                        y2 = y1 + col_in
 
-                        x1 = K.cast(x1, 'int32')
-                        x2 = K.cast(x2, 'int32')
-                        y1 = K.cast(y1, 'int32')
-                        y2 = K.cast(y2, 'int32')
+                        x1 = K.cast(x1, 'int32')[0]
+                        x2 = K.cast(x2, 'int32')[0]
+                        y1 = K.cast(y1, 'int32')[0]
+                        y2 = K.cast(y2, 'int32')[0]
 
-                        dx = K.maximum(1,x2-x1)
-                        x2 = x1 + dx
-
-                        dy = K.maximum(1,y2-y1)
-                        y2 = y1 + dy
-                        
-                        new_shape = [input_shape[0], input_shape[1],
-                                     y2 - y1, x2 - x1]
-
-                        x_crop = img[:, :, y1:y2, x1:x2]
-                        xm = K.reshape(x_crop, new_shape)
-                        pooled_val = K.max(xm, axis=(2, 3))
-                        outputs.append(pooled_val)
-
-            elif self.dim_ordering == 'tf':
-                for jy in range(num_pool_regions):
-                    for ix in range(num_pool_regions):
-                        x1 = x + ix * row_length
-                        x2 = x1 + row_length
-                        y1 = y + jy * col_length
-                        y2 = y1 + col_length
-
-                        x1 = K.cast(x1, 'int32')
-                        x2 = K.cast(x2, 'int32')
-                        y1 = K.cast(y1, 'int32')
-                        y2 = K.cast(y2, 'int32')
-
-                        new_shape = [input_shape[0], y2 - y1,
+                        new_shape = [1, y2 - y1,
                                      x2 - x1, input_shape[3]]
-                        x_crop = img[:, y1:y2, x1:x2, :]
+                        x_crop = x_crop_in[y1:y2, x1:x2, :]
                         xm = K.reshape(x_crop, new_shape)
                         pooled_val = K.max(xm, axis=(1, 2))
-                        outputs.append(pooled_val)
+                        acc.append(pooled_val)
+                return acc
 
-        final_output = K.concatenate(outputs,axis=0)
-        final_output = K.reshape(final_output,(1,self.num_rois, self.pool_size, self.pool_size, self.nb_channels))
+            x = tf.map_fn(fun, [img, x, y, row_length, col_length], dtype=[tf.float32] * (num_pool_regions * 2))
+            outputs.extend(x)
+
+        final_output = K.concatenate(outputs, axis=1)
+        final_output = K.reshape(final_output, (-1, self.num_rois, self.pool_size, self.pool_size, self.nb_channels))
 
         if self.dim_ordering == 'th':
             final_output = K.permute_dimensions(final_output, (0, 1, 4, 2, 3))
