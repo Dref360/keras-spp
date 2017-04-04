@@ -57,7 +57,6 @@ class RoiPooling(Layer):
         assert (len(x) == 2)
 
         img = x[0]
-        print(img)
         rois = x[1]
 
         input_shape = K.shape(img)

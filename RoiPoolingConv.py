@@ -90,7 +90,7 @@ class RoiPoolingConv(Layer):
                         acc.append(pooled_val)
                 return acc
 
-            x = tf.map_fn(fun, [img, x, y, row_length, col_length], dtype=[tf.float32] * (num_pool_regions * 2))
+            x = tf.map_fn(fun, [img, x, y, row_length, col_length], dtype=[tf.float32] * (num_pool_regions ** 2))
             outputs.extend(x)
 
         final_output = K.concatenate(outputs, axis=1)

@@ -24,7 +24,7 @@ model = Model([in_img, in_roi], out_roi_pool)
 model.summary()
 
 model.compile(loss='mse', optimizer='sgd')
-batch_size = 2
+batch_size = 1
 
 for img_size in [8, 16, 32]:
 
@@ -60,7 +60,6 @@ for img_size in [8, 16, 32]:
             idx = 0
 
             for pool_num, num_pool_regions in enumerate(pooling_regions):
-                print("POOL NUM:",pool_num)
                 for ix in range(num_pool_regions):
                     for jy in range(num_pool_regions):
                         for cn in range(num_channels):

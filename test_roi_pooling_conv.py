@@ -25,7 +25,7 @@ out_roi_pool = RoiPoolingConv(pooling_regions, num_rois)([in_img, in_roi])
 
 model = Model([in_img, in_roi], out_roi_pool)
 model.summary()
-batch_size = 2
+batch_size = 1
 model.compile(loss='mse', optimizer='sgd')
 
 for img_size in [32]:
